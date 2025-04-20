@@ -1,4 +1,3 @@
-# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 import argparse
 import datetime
 import json
@@ -32,7 +31,7 @@ def get_args_parser():
     parser.add_argument('--frozen_weights', type=str, default=None,
                         help="Path to the pretrained model. If set, only the mask head will be trained")
     
-    parser.add_argument('--num_classes', default=91, type=int, help="Number of object classes")
+    parser.add_argument('--num_classes', default=2, type=int, help="Number of object classes")
 
     # * Backbone
     parser.add_argument('--backbone', default='resnet50', type=str,
@@ -171,7 +170,7 @@ def main(args):
         checkpoint = torch.load(args.frozen_weights, map_location='cpu')
         model_without_ddp.detr.load_state_dict(checkpoint['model'])
 
-     output_dir = Path(args.output_dir)
+    output_dir = Path(args.output_dir)
     
     if args.resume:
         if args.resume.startswith('https'):
@@ -264,8 +263,6 @@ def main(args):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser('DETR training and evaluation script', parents=[get_args_parser()])
+    parser = argparse.ArgumentParser('DETR training script', parents=[get_args_parser()])
     args = parser.parse_args()
-    if args.output_dir:
-        Path(args.output_dir).mkdir(parents=True, exist_ok=True)
     main(args)
