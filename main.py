@@ -15,6 +15,13 @@ from datasets import build_dataset, get_coco_api_from_dataset
 from engine import evaluate, train_one_epoch
 from models import build_model
 
+# main.py
+
+from models import build
+import torch
+
+
+
 
 def get_args_parser():
     parser = argparse.ArgumentParser('Set transformer detector', add_help=False)
@@ -105,6 +112,32 @@ def get_args_parser():
 
 
 def main(args):
+
+    class Args:
+        num_classes = 2
+        num_queries = 100
+        aux_loss = True
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        bbox_loss_coef = 5
+        giou_loss_coef = 2
+        mask_loss_coef = 1
+        dice_loss_coef = 1
+        frozen_weights = None
+        dec_layers = 6
+        eos_coef = 0.1
+        masks = True
+        dataset_file = 'coco_panoptic'
+
+    args = Args()
+
+    # Build model, criterion, and postprocessors
+    model, criterion, postprocessors = build(args)
+
+    print(f"Model: {model}")
+    print(f"Criterion: {criterion}")
+    print(f"Postprocessors: {postprocessors}")
+
+    
     utils.init_distributed_mode(args)
     print("git:\n  {}\n".format(utils.get_sha()))
 
