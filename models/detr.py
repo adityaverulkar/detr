@@ -17,6 +17,85 @@ from .segmentation import (DETRsegm, PostProcessPanoptic, PostProcessSegm,
                            dice_loss, sigmoid_focal_loss)
 from .transformer import build_transformer
 
+# models/detr.py
+
+import torch
+import torch.nn as nn
+from .backbone import build_backbone
+from .transformer import build_transformer
+from .matcher import build_matcher
+from .detr import DETR, SetCriterion, PostProcess
+from .segmentation import DETRsegm, PostProcessSegm, PostProcessPanoptic
+
+
+def build(args):
+    """
+    Builds the DETR model, criterion, and postprocessors.
+
+    Args:
+        args (Namespace): Arguments passed from the command line.
+        
+    Returns:
+        model (nn.Module): The built DETR model.
+        criterion (nn.Module): The loss computation module.
+        postprocessors (dict): Postprocessing functions.
+    """
+
+    num_classes = args.num_classes
+    device = torch.device(args.device)
+
+    # Build the backbone and transformer
+    backbone = build_backbone(args)
+    transformer = build_transformer(args)
+
+    # Initialize the DETR model
+    model = DETR(
+        backbone,
+        transformer,
+        num_classes=num_classes,
+        num_queries=args.num_queries,
+        aux_loss=args.aux_loss,
+    )
+
+    if args.masks:
+        model = DETRsegm(model, freeze_detr=(args.frozen_weights is not None))
+
+    # Build the matcher
+    matcher = build_matcher(args)
+
+    # Define the loss weights
+    weight_dict = {'loss_ce': 1, 'loss_bbox': args.bbox_loss_coef}
+    weight_dict['loss_giou'] = args.giou_loss_coef
+    if args.masks:
+        weight_dict["loss_mask"] = args.mask_loss_coef
+        weight_dict["loss_dice"] = args.dice_loss_coef
+
+    if args.aux_loss:
+        aux_weight_dict = {}
+        for i in range(args.dec_layers - 1):
+            aux_weight_dict.update({k + f'_{i}': v for k, v in weight_dict.items()})
+        weight_dict.update(aux_weight_dict)
+
+    losses = ['labels', 'boxes', 'cardinality']
+    if args.masks:
+        losses += ["masks"]
+
+    # Create the criterion (loss computation module)
+    criterion = SetCriterion(num_classes, matcher=matcher, weight_dict=weight_dict,
+                             eos_coef=args.eos_coef, losses=losses)
+    criterion.to(device)
+
+    # Postprocessing functions
+    postprocessors = {'bbox': PostProcess()}
+    if args.masks:
+        postprocessors['segm'] = PostProcessSegm()
+        if args.dataset_file == "coco_panoptic":
+            is_thing_map = {i: i <= 90 for i in range(201)}
+            postprocessors["panoptic"] = PostProcessPanoptic(is_thing_map, threshold=0.85)
+
+    return model, criterion, postprocessors
+
+
 
 class DETR(nn.Module):
     """ This is the DETR module that performs object detection """
