@@ -171,18 +171,32 @@ def main(args):
         checkpoint = torch.load(args.frozen_weights, map_location='cpu')
         model_without_ddp.detr.load_state_dict(checkpoint['model'])
 
-    output_dir = Path(args.output_dir)
+     output_dir = Path(args.output_dir)
+    
     if args.resume:
         if args.resume.startswith('https'):
             checkpoint = torch.hub.load_state_dict_from_url(
                 args.resume, map_location='cpu', check_hash=True)
         else:
             checkpoint = torch.load(args.resume, map_location='cpu')
-        model_without_ddp.load_state_dict(checkpoint['model'])
+    
+        state_dict = checkpoint['model']
+    
+        # ⚠️ Remove classification head weights if incompatible
+        if state_dict['class_embed.weight'].size(0) != args.num_classes:
+            print(f"⚠️ Removing incompatible classifier head: "
+                  f"Checkpoint has {state_dict['class_embed.weight'].size(0)} classes, "
+                  f"but model expects {args.num_classes}")
+            state_dict.pop('class_embed.weight', None)
+            state_dict.pop('class_embed.bias', None)
+    
+        model_without_ddp.load_state_dict(state_dict, strict=False)
+    
         if not args.eval and 'optimizer' in checkpoint and 'lr_scheduler' in checkpoint and 'epoch' in checkpoint:
             optimizer.load_state_dict(checkpoint['optimizer'])
             lr_scheduler.load_state_dict(checkpoint['lr_scheduler'])
             args.start_epoch = checkpoint['epoch'] + 1
+
 
     if args.eval:
         test_stats, coco_evaluator = evaluate(model, criterion, postprocessors,
